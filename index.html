@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0b0d10" />
+  <meta name="description" content="MTG deck builder and solo goldfish simulator powered by Scryfall." />
+  <title>MTG Deckbuilder 2</title>
+  <link rel="preconnect" href="https://api.scryfall.com" />
+  <link rel="preconnect" href="https://cards.scryfall.io" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">MAGIC: THE GATHERING</p>
+      <h1>MTG Deckbuilder 2</h1>
+    </div>
+    <div class="header-actions">
+      <button id="saveDeckBtn" class="btn secondary">保存</button>
+      <button id="exportDeckBtn" class="btn secondary">エクスポート</button>
+      <button id="importDeckBtn" class="btn primary">インポート</button>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <section class="panel search-panel" aria-labelledby="search-heading">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">CARD SEARCH</p>
+          <h2 id="search-heading">カードを探す</h2>
+        </div>
+        <span class="pill">Scryfall API</span>
+      </div>
+
+      <form id="searchForm" class="search-form">
+        <input id="searchInput" type="search" autocomplete="off" placeholder="カード名・テキスト・Scryfall構文" aria-label="カード検索" />
+        <button class="btn primary" type="submit">検索</button>
+      </form>
+      <div class="search-hints">例: <code>Lightning Bolt</code> / <code>t:creature c:g mv&lt;=2</code> / <code>f:modern</code></div>
+      <div id="searchStatus" class="status-line" aria-live="polite"></div>
+      <div id="searchResults" class="card-grid"></div>
+    </section>
+
+    <section class="panel deck-panel" aria-labelledby="deck-heading">
+      <div class="panel-heading deck-heading-row">
+        <div>
+          <p class="eyebrow">DECK BUILDER</p>
+          <h2 id="deck-heading">デッキ</h2>
+        </div>
+        <div class="deck-meta-inputs">
+          <input id="deckName" class="compact-input" type="text" placeholder="デッキ名" aria-label="デッキ名" />
+          <select id="formatSelect" class="compact-input" aria-label="フォーマット">
+            <option value="freeform">Freeform</option>
+            <option value="standard">Standard</option>
+            <option value="pioneer">Pioneer</option>
+            <option value="modern">Modern</option>
+            <option value="legacy">Legacy</option>
+            <option value="vintage">Vintage</option>
+            <option value="pauper">Pauper</option>
+            <option value="commander">Commander</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="deck-summary" id="deckSummary"></div>
+      <div class="stats-wrap">
+        <div>
+          <h3>マナカーブ</h3>
+          <div id="manaCurve" class="mana-curve"></div>
+        </div>
+        <div>
+          <h3>色構成</h3>
+          <div id="colorStats" class="color-stats"></div>
+        </div>
+      </div>
+
+      <div class="deck-columns">
+        <div>
+          <div class="list-header">
+            <h3>メインデッキ <span id="mainCount" class="muted"></span></h3>
+            <button id="clearMainBtn" class="text-btn">クリア</button>
+          </div>
+          <div id="mainDeck" class="deck-list"></div>
+        </div>
+        <div>
+          <div class="list-header">
+            <h3>サイドボード <span id="sideCount" class="muted"></span></h3>
+            <button id="clearSideBtn" class="text-btn">クリア</button>
+          </div>
+          <div id="sideboard" class="deck-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel simulator-panel" aria-labelledby="sim-heading">
+      <div class="panel-heading simulator-heading-row">
+        <div>
+          <p class="eyebrow">GOLDFISH</p>
+          <h2 id="sim-heading">一人回し</h2>
+        </div>
+        <div class="sim-primary-actions">
+          <button id="newGameBtn" class="btn primary">新しいゲーム</button>
+          <button id="drawBtn" class="btn secondary" disabled>1枚引く</button>
+          <button id="nextTurnBtn" class="btn secondary" disabled>次のターン</button>
+        </div>
+      </div>
+
+      <div class="sim-toolbar">
+        <div class="counter-group">
+          <span>ターン <strong id="turnValue">0</strong></span>
+          <span>ライフ</span>
+          <button id="lifeMinusBtn" class="icon-btn" disabled>-</button>
+          <strong id="lifeValue">20</strong>
+          <button id="lifePlusBtn" class="icon-btn" disabled>+</button>
+        </div>
+        <div class="toolbar-actions">
+          <button id="mulliganBtn" class="text-btn" disabled>マリガン</button>
+          <button id="shuffleBtn" class="text-btn" disabled>ライブラリーをシャッフル</button>
+          <button id="untapBtn" class="text-btn" disabled>全てアンタップ</button>
+          <button id="resetGameBtn" class="text-btn danger" disabled>終了</button>
+        </div>
+      </div>
+
+      <div id="simStatus" class="status-line" aria-live="polite">メインデッキを作成して「新しいゲーム」を押してください。</div>
+
+      <div class="zone-grid">
+        <section class="zone battlefield-zone">
+          <div class="zone-title"><h3>戦場</h3><span id="battlefieldCount" class="muted">0</span></div>
+          <div id="battlefieldZone" class="play-zone"></div>
+        </section>
+        <section class="zone hand-zone">
+          <div class="zone-title"><h3>手札</h3><span id="handCount" class="muted">0</span></div>
+          <div id="handZone" class="play-zone"></div>
+        </section>
+        <section class="zone small-zone">
+          <div class="zone-title"><h3>ライブラリー</h3><span id="libraryCount" class="muted">0</span></div>
+          <button id="revealTopBtn" class="btn secondary full-width" disabled>トップを公開</button>
+          <div id="revealedCard" class="revealed-card"></div>
+        </section>
+        <section class="zone small-zone">
+          <div class="zone-title"><h3>墓地</h3><span id="graveyardCount" class="muted">0</span></div>
+          <div id="graveyardZone" class="mini-zone"></div>
+        </section>
+        <section class="zone small-zone">
+          <div class="zone-title"><h3>追放</h3><span id="exileCount" class="muted">0</span></div>
+          <div id="exileZone" class="mini-zone"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="importDialog" class="modal">
+    <form method="dialog" class="modal-card" id="importForm">
+      <div class="modal-heading">
+        <div>
+          <p class="eyebrow">IMPORT</p>
+          <h2>デッキリストを読み込む</h2>
+        </div>
+        <button value="cancel" class="icon-btn" aria-label="閉じる">×</button>
+      </div>
+      <p class="muted">Arena / MTGO風の「枚数 カード名」に対応。<code>Sideboard</code> 行以降はサイドボードとして読み込みます。</p>
+      <textarea id="importText" rows="16" placeholder="Deck\n4 Lightning Bolt\n4 Monastery Swiftspear\n...\n\nSideboard\n2 Smash to Smithereens"></textarea>
+      <div id="importStatus" class="status-line" aria-live="polite"></div>
+      <div class="modal-actions">
+        <button value="cancel" class="btn secondary">キャンセル</button>
+        <button type="button" id="runImportBtn" class="btn primary">読み込む</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="exportDialog" class="modal">
+    <form method="dialog" class="modal-card">
+      <div class="modal-heading">
+        <div>
+          <p class="eyebrow">EXPORT</p>
+          <h2>デッキリスト</h2>
+        </div>
+        <button value="cancel" class="icon-btn" aria-label="閉じる">×</button>
+      </div>
+      <textarea id="exportText" rows="16" readonly></textarea>
+      <div class="modal-actions">
+        <button type="button" id="copyExportBtn" class="btn primary">コピー</button>
+        <button value="cancel" class="btn secondary">閉じる</button>
+      </div>
+    </form>
+  </dialog>
+
+  <template id="emptyStateTemplate">
+    <div class="empty-state">まだカードがありません。</div>
+  </template>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
