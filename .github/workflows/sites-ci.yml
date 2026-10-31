@@ -1,0 +1,36 @@
+name: Sites CI
+
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'lib/**'
+      - 'drizzle/**'
+      - 'scripts/**'
+      - '.openai/**'
+      - 'package.json'
+      - 'vite.config.ts'
+      - 'tsconfig.json'
+      - 'next.config.ts'
+      - '.github/workflows/sites-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: package.json
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Check MTGJSON exporter syntax
+        run: python -m py_compile scripts/export_mtgjson_d1.py
+      - name: Build Sites project
+        run: npm run build

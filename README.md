@@ -1,45 +1,85 @@
-# MTG Deckbuilder 2
+# MTG EDH Deckbuilder — ChatGPT Sites edition
 
-ブラウザだけで使える Magic: The Gathering のデッキ作成 + 一人回し（Goldfish）Web アプリです。
+`sites-edh` は ChatGPT Sites 向けの Commander / EDH デッキビルダー + 通信対戦版です。`main` の GitHub Pages 版はそのまま残しています。
 
-## 主な機能
+## 実装済み
 
-- Scryfall API を使ったカード検索
-- メインデッキ / サイドボード管理
-- デッキ名・フォーマット設定
-- マナカーブ / 色構成 / 枚数の簡易集計
-- LocalStorage による自動保存
-- Arena / MTGO 風デッキリストのインポート
-- テキスト形式のエクスポート
-- 一人回しシミュレーター
-  - 初手7枚
-  - ロンドン・マリガン用のボトム操作
-  - ドロー / ターン進行
-  - 戦場・手札・墓地・追放への移動
-  - タップ / アンタップ
-  - ライフ管理
-  - ライブラリーのシャッフル / トップ公開
+- Sign in with ChatGPT
+- アカウントごとのデッキ保存（D1）
+- MTGJSON `AllPrintings.sqlite` をカードマスタのソースとして利用
+- 英語名 / 日本語名検索
+- 日本語版が存在する印刷は日本語名・日本語カードテキスト・日本語画像を優先
+- 日本語 `scryfallId` がない場合は `multiverseId` / Gatherer を利用し、それもなければ英語画像へフォールバック
+- Commander 100枚チェック
+- 統率者 1〜2枚チェック
+- Color Identity チェック
+- Commander legality チェック
+- 同名カード枚数チェック（基本土地・特殊枚数制限を考慮）
+- 2〜4人 EDH ルーム
+- 招待コード
+- 40点ライフ
+- 統率者ダメージ
+- 初手7枚 / Mulligan / Bottom / Draw / Shuffle / Library Top
+- Battlefield / Hand / Graveyard / Exile / Command Zone
+- Tap / Untap
+- +1/+1 カウンター
+- Token生成
+- ターン・フェイズ進行
+- 投了
+- 他プレイヤーには手札内容・ライブラリー内容を送らない
+- D1にゲーム状態とアクション履歴を保存し、再読み込み後も復帰可能
 
-## ローカル起動
+## データ構成
 
-静的ファイルだけで動作します。
+### カードデータ
+
+カード情報の正は MTGJSON の `AllPrintings.sqlite` です。
+
+MTGJSON SQLite から Sites 用 D1 へ必要な列だけ投影します。カード検索時に Scryfall API をカードデータベースとして使用しません。
+
+画像だけは MTGJSON の identifiers を利用します。
+
+優先順位:
+
+1. MTGJSON `cardForeignData` の Japanese `scryfallId`
+2. Japanese `multiverseId` → Gatherer
+3. 英語版 `scryfallId`
+
+### ユーザーデータ
+
+D1 の `decks.owner_email` を Sign in with ChatGPT の認証済みメールアドレスと照合します。デッキの取得・更新・削除はすべてサーバー側で所有者確認を行います。
+
+## MTGJSONの取り込み
+
+公式から `AllPrintings.sqlite` を取得してプロジェクトルートへ置きます。
 
 ```bash
-python -m http.server 8080
+python scripts/export_mtgjson_d1.py AllPrintings.sqlite
 ```
 
-その後 `http://localhost:8080` を開いてください。
+`.mtgjson-d1/` に分割SQLが生成されます。
 
-## GitHub Pages
+日本語データは `cardForeignData` の `language = 'Japanese'` を利用し、言語別 identifiers も保存します。
 
-`main` ブランチへの push で `.github/workflows/pages.yml` が自動デプロイします。
+## Sites
 
-公開URL: https://tamafull.github.io/mtg-deckbuilder2/
+`.openai/hosting.json` は D1 binding `DB` を使用する構成です。
 
-## 外部API
+```json
+{
+  "d1": "DB",
+  "r2": null
+}
+```
 
-カード情報・画像は [Scryfall](https://scryfall.com/) を利用しています。
+Sitesで保存・デプロイするときは、`drizzle/` のスキーマmigrationを先に適用し、その後 MTGJSON の生成SQLをD1へ取り込みます。
+
+## 対戦同期
+
+現在のUIは D1 を正として約1秒間隔で状態を再取得します。各操作は `game_rooms.version` を使った optimistic locking で競合を検出します。
+
+これにより、Sites上で安全に動くことを優先しつつ、2〜4人の通信対戦が可能です。将来 WebSocket / Durable Object 相当へ差し替えられるよう、ゲーム状態更新APIは独立させています。
 
 ## 注意
 
-このアプリは Wizards of the Coast / Scryfall の公式製品ではありません。Magic: The Gathering のカード名・画像等の権利は各権利者に帰属します。
+このアプリは Wizards of the Coast、MTGJSON、Scryfall の公式製品ではありません。Magic: The Gathering のカード名・画像等の権利は各権利者に帰属します。
