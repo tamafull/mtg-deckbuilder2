@@ -12,7 +12,7 @@ import json
 import re
 import sqlite3
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 NUMBER_WORDS = {
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
@@ -25,8 +25,8 @@ def table_columns(conn: sqlite3.Connection, table: str) -> set[str]:
     return {row[1] for row in conn.execute(f'PRAGMA table_info("{table}")')}
 
 
-def col(cols: set[str], name: str, fallback: str = "NULL") -> str:
-    return f'c."{name}"' if name in cols else fallback
+def col(cols: set[str], name: str, fallback: str = "NULL", alias: str = "c") -> str:
+    return f'{alias}."{name}"' if name in cols else fallback
 
 
 def sql_literal(value: Any) -> str:
@@ -146,8 +146,8 @@ def main() -> None:
         {col(cards_cols,'toughness')} AS toughness,
         {col(cards_cols,'loyalty')} AS loyalty,
         {col(cards_cols,'hasAlternativeDeckLimit','0')} AS hasAlternativeDeckLimit,
-        i.{('"scryfallId"' if 'scryfallId' in ids_cols else 'NULL')} AS scryfallId,
-        i.{('"scryfallOracleId"' if 'scryfallOracleId' in ids_cols else 'NULL')} AS oracleId
+        {col(ids_cols,'scryfallId','NULL','i')} AS scryfallId,
+        {col(ids_cols,'scryfallOracleId','NULL','i')} AS oracleId
       FROM cards c
       LEFT JOIN cardIdentifiers i ON i.uuid=c.uuid
       WHERE ({col(cards_cols,'availability',"'paper'")} LIKE '%paper%' OR {col(cards_cols,'availability',"'paper'")} IS NULL)
@@ -166,10 +166,8 @@ def main() -> None:
     for row in conn.execute(q, ("Japanese",)):
         data = dict(row)
         identifiers = parse_identifiers(data.get("identifiers"))
-        scryfall_id = data.get("scryfallId") or identifiers.get("scryfallId")
-        multiverse_id = data.get("multiverseId") or identifiers.get("multiverseId")
-        data["scryfallId"] = scryfall_id
-        data["multiverseId"] = multiverse_id
+        data["scryfallId"] = data.get("scryfallId") or identifiers.get("scryfallId")
+        data["multiverseId"] = data.get("multiverseId") or identifiers.get("multiverseId")
         japanese_by_uuid.setdefault(str(data["uuid"]), []).append(data)
 
     write, close = chunks_writer(args.out, args.chunk_mb * 1024 * 1024)
@@ -186,11 +184,8 @@ def main() -> None:
         legalities = json.dumps(legal_by_uuid.get(uuid, {}), ensure_ascii=False, separators=(",", ":"))
         basic = 1 if "Basic Land" in type_line else 0
         limit = deck_limit(text, row["hasAlternativeDeckLimit"])
-        values = [uuid,name,None,"English",row["manaCost"],row["manaValue"] or 0,type_line,text,colors,identity,row["rarity"],row["setCode"],row["collectorNumber"],None,row["oracleId"],row["power"],row["toughness"],row["loyalty"],legalities,None,basic,limit,name.casefold()]
+        values = [uuid,name,None,"English",row["manaCost"],row["manaValue"] or 0,type_line,text,colors,identity,row["rarity"],row["setCode"],row["collectorNumber"],row["scryfallId"],row["oracleId"],row["power"],row["toughness"],row["loyalty"],legalities,None,basic,limit,name.casefold()]
         write("INSERT OR REPLACE INTO mtg_cards (uuid,name,face_name,language,mana_cost,mana_value,type_line,oracle_text,colors,color_identity,rarity,set_code,collector_number,scryfall_id,oracle_id,power,toughness,loyalty,legalities,image_url,is_basic,deck_limit,normalized_name) VALUES (" + ",".join(sql_literal(v) for v in values) + ");\n")
-        # Keep the English printing Scryfall id on the card row.
-        if row["scryfallId"]:
-            write(f"UPDATE mtg_cards SET scryfall_id={sql_literal(row['scryfallId'])} WHERE uuid={sql_literal(uuid)};\n")
         for f in japanese_by_uuid.get(uuid, []):
             jname = f.get("name") or name
             jvalues = [uuid,"Japanese",jname,str(jname).casefold(),f.get("type") or type_line,f.get("text") or text,f.get("uuid"),f.get("scryfallId"),f.get("multiverseId"),None]
