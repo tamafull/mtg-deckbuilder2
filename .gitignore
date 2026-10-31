@@ -1,0 +1,9 @@
+node_modules/
+.next/
+dist/
+.wrangler/
+.mtgjson-d1/
+AllPrintings.sqlite
+AllPrintings.sqlite.*
+.env
+.env.*
