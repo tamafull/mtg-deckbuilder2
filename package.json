@@ -9,7 +9,8 @@
     "start": "wrangler dev --config dist/server/wrangler.json",
     "lint": "oxlint",
     "format": "oxfmt",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "mtgjson:export": "python scripts/export_mtgjson_d1.py AllPrintings.sqlite"
   },
   "dependencies": {
     "drizzle-orm": "0.45.4",
