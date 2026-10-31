@@ -4,7 +4,7 @@ export const runtime = 'edge';
 
 type CardRow = {
   uuid: string; name: string; localized_name: string | null; localized_type_line: string | null;
-  localized_oracle_text: string | null; localized_scryfall_id: string | null; localized_image_url: string | null;
+  localized_oracle_text: string | null; localized_scryfall_id: string | null; localized_multiverse_id: string | null; localized_image_url: string | null;
   mana_cost: string | null; mana_value: number; type_line: string | null; oracle_text: string | null;
   colors: string; color_identity: string; rarity: string | null; set_code: string | null;
   collector_number: string | null; scryfall_id: string | null; oracle_id: string | null;
@@ -25,6 +25,7 @@ export async function GET(request: Request) {
       (SELECT n.type_line FROM mtg_card_names n WHERE n.card_uuid=c.uuid AND n.language='Japanese' ORDER BY n.id LIMIT 1) AS localized_type_line,
       (SELECT n.oracle_text FROM mtg_card_names n WHERE n.card_uuid=c.uuid AND n.language='Japanese' ORDER BY n.id LIMIT 1) AS localized_oracle_text,
       (SELECT n.scryfall_id FROM mtg_card_names n WHERE n.card_uuid=c.uuid AND n.language='Japanese' ORDER BY n.id LIMIT 1) AS localized_scryfall_id,
+      (SELECT n.multiverse_id FROM mtg_card_names n WHERE n.card_uuid=c.uuid AND n.language='Japanese' ORDER BY n.id LIMIT 1) AS localized_multiverse_id,
       (SELECT n.image_url FROM mtg_card_names n WHERE n.card_uuid=c.uuid AND n.language='Japanese' ORDER BY n.id LIMIT 1) AS localized_image_url
     FROM mtg_cards c
     WHERE c.normalized_name LIKE ?1
@@ -42,6 +43,10 @@ export async function GET(request: Request) {
 
   return Response.json({ cards: (result.results || []).map((c) => {
     const japaneseScryfallId = c.localized_scryfall_id || null;
+    const japaneseMultiverseId = c.localized_multiverse_id || null;
+    const japaneseImage = c.localized_image_url
+      || (japaneseScryfallId ? `https://api.scryfall.com/cards/${japaneseScryfallId}?format=image&version=normal` : null)
+      || (japaneseMultiverseId ? `https://gatherer.wizards.com/Handlers/Image.ashx?multiverseid=${encodeURIComponent(japaneseMultiverseId)}&type=card` : null);
     return {
       uuid: c.uuid,
       name: c.localized_name || c.name,
@@ -64,8 +69,7 @@ export async function GET(request: Request) {
       legalities: parseJson<Record<string, string>>(c.legalities, {}),
       isBasic: Boolean(c.is_basic),
       deckLimit: c.deck_limit,
-      imageUrl: c.localized_image_url
-        || (japaneseScryfallId ? `https://api.scryfall.com/cards/${japaneseScryfallId}?format=image&version=normal` : null)
+      imageUrl: japaneseImage
         || c.image_url
         || (c.scryfall_id ? `https://api.scryfall.com/cards/${c.scryfall_id}?format=image&version=normal` : null),
     };
